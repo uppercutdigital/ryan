@@ -149,3 +149,31 @@ Copy the **raw** `post_content` from `wp/v2/<type>/<id>?context=edit`. The WooCo
 Safeguard a published test page with `catalog_visibility:"hidden"` and noindex/nofollow robots meta, then **prove** it: fetch the shop, the category archives, site search and the sitemap, and confirm the test slug is absent while the original is present.
 
 Give it a distinct title. A test page that inherits the original's title tag is a duplicate-meta problem from the moment it is published.
+
+## 8. Where this applies
+
+Categorised as **Platform › WordPress**. It works on any WordPress/Elementor site, but it was built out on **lead-gen** work in the **education and training** vertical, and those two contexts carry specifics worth knowing.
+
+### Lead-gen sites
+
+On a lead-gen site the high-value pages usually do **not** transact. Check the product type before you design:
+
+- A WooCommerce product of `type: external` has **no cart** — it redirects to a form. If the page you are rebuilding is one of these, every CTA must point at that form, not at an on-page anchor.
+- **Audit every CTA destination before launch.** Placeholder anchors like `href="#enrol"` render and style perfectly while doing nothing. A page can look finished and convert zero.
+- **Confirm the form is the right one.** Check the destination form matches the product. A qualification page pointing at a generic enquiry form is a silent leak, and it is easy to inherit when duplicating a page.
+- **Add a per-CTA tracking parameter** (`?cta=hero-guide`, `?cta=final-enrol`) so lead source is attributable per button. Use a neutral parameter name — `utm_*` will overwrite the visitor's real attribution.
+- **Gated pricing is a strategy decision, not an oversight.** If pricing sits behind a form, do not un-gate it without asking. Offer it as a test.
+- Where price is shown, show the payment plan honestly alongside it, including the total.
+
+### Education and training
+
+Anything implying a qualification, outcome or entitlement is a regulated claim:
+
+- Scope-of-practice statements — what a graduate can and cannot legally do
+- "Nationally recognised", accreditation numbers, awarding-body names
+- Refund, deposit and cooling-off terms
+- Who teaches or assesses the course, and what they are qualified in
+
+Get each from the provider in writing. Do not infer them from a sibling page, and do not soften or sharpen the wording to improve the copy.
+
+Turning a scope disclaimer into a plain "what you can do / what sits outside your scope" comparison usually improves both trust and conversion — the same facts, presented as confidence rather than as a legal warning.
