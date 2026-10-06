@@ -1,9 +1,9 @@
 ---
 name: keyword-drop-analysis
-description: Investigate why a client's keyword dropped in rankings and recommend what to do about it. Confirms the drop in Ahrefs Rank Tracker (day-on-day), cross-checks it against Google Search Console data in SEO Gets, checks search volume trends, detects ranking-URL swaps and cannibalisation, diffs the SERP to see which competitors moved, compares their title, meta description, H1 and on-page content against ours, and ends with a short, prioritised fix list. Use when asked why a keyword dropped, lost rankings, fell out of the top 10, or when a client asks what happened to a term. Triggers on "keyword drop", "why did this keyword drop", "lost ranking", "ranking dropped", "keyword drop analysis", "dropped position", "what happened to our ranking".
+description: Investigate why a client's keyword dropped in rankings and recommend what to do about it. Confirms the drop in Ahrefs Rank Tracker (day-on-day), cross-checks it against Google Search Console data in SEO Gets, checks search volume trends, detects ranking-URL swaps and cannibalisation, diffs the SERP to see which competitors moved, checks the AI Overview (who Google cites) and the paid ads and Shopping results pushing organic down, compares their title, meta description, H1 and on-page content against ours, and ends with a short, prioritised fix list. Use when asked why a keyword dropped, lost rankings, fell out of the top 10, or when a client asks what happened to a term. Triggers on "keyword drop", "why did this keyword drop", "lost ranking", "ranking dropped", "keyword drop analysis", "dropped position", "what happened to our ranking".
 license: Apache-2.0
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   category: "SEO"
   subcategory: "Rank tracking"
 ---
@@ -59,6 +59,7 @@ Check these before you trust the numbers:
 | `position` is null | We fell out of the tracked range, or Ahrefs couldn't find us. Treat it as a big drop and check that the page is still live and indexable (step 5) |
 | `best_position_kind_previous` was `snippet`, `local_pack` or `ai_overview_sitelink`, now `organic` | We lost a SERP feature, not necessarily organic ground. This is a different problem with a different fix |
 | `serp_features` gained `ai_overview`, `local_pack`, `video` or `discussion` | The page may hold the same organic slot but sit lower on screen. Clicks fall even though position barely moves |
+| `position` is null **and** `serp_features` is empty | When we aren't ranking, the overview also returns no SERP features, so you can't tell a real drop from a failed capture. Open the SERP itself (`rank-tracker-serp-overview`). If it has results, the drop is real |
 | A move of 1–2 positions inside the top 10 | Normal daily fluctuation. Report it, recommend watching for 3–5 days, and don't build a big fix list on it |
 
 A drop is worth a full investigation when it's **3+ positions inside the top 10**, **falling out of the top 3 or top 10**, **5+ positions outside the top 10**, or a **lost SERP feature**. Below that, do steps 2–4 only and say why you stopped.
@@ -124,6 +125,26 @@ For every URL, line up the two snapshots:
 
 **Is it page-wide or just this keyword?** For each competitor that overtook us, run `site-explorer-organic-keywords` on their URL (`mode: exact`) with `date_compared` set about 30 days back. If they gained across many related keywords, they improved the page. If they gained on this one term only, it's more likely SERP churn.
 
+## 6b. AI Overview and paid ads: what sits above organic
+
+A #3 organic ranking can sit below an AI Overview, four ads and a Shopping carousel, and get almost no clicks. Check both every time, in the same SERP snapshots from step 6. Present them as the **latest captured SERP** with its `update_date`. No connected tool gives a real-time Google result, so never call it "live" without a timestamp.
+
+**AI Overview (AIO)**
+- Is there one? `type: ai_overview` in the snapshot, or `ai_overview` in `serp_features` from step 2. Compare with the previous snapshot: did the AIO **appear, disappear or stay**?
+- **Who's cited?** Every `ai_overview_sitelink` row is a cited page. List them in order, then and now.
+- **Are we cited?** Our domain among the `ai_overview_sitelink` rows (or `best_position_kind: ai_overview_sitelink` in step 2) means yes. Being cited while organic drops is a very different story from not being cited at all.
+- **Who gained or lost citations** between snapshots, and are the cited pages also the ones that overtook us organically?
+- **What gets cited:** open the cited pages (step 7) and look for what they share. That's usually a short, direct answer near the top, specific facts (prices, locations, timeframes), lists or tables, and clear entity signals such as business name, address and reviews.
+- The Ahrefs Brand Radar AI Overview data (`brand-radar-ai-responses` with `data_source: google_ai_overviews_keywords`) needs an add-on that this account doesn't have. Don't call it; the SERP snapshot is the source. If it ever becomes available, pass `prompts: "ahrefs"` (it errors without a `report_id` otherwise).
+
+**Paid ads and Shopping**
+- Rows with `type` `paid_top`, `paid_bottom` or `paid_sitelink` are text ads, and `shopping` / `organic_shopping` is the Shopping carousel. Note **how many** ads sit above organic, then and now. More ads appearing pushes organic down the screen and cuts clicks even when position holds.
+- **Who's advertising:** take the domain from each ad's `url` and the headline from its `title`. The URL's tracking parameters often reveal the keyword they're bidding on (for example `hsa_kw=custom%20made%20business%20suits`).
+- **Competitive intel:** an ad headline like "Business Suits From $599" tells you the angle competitors pay to push, usually price, speed or proof. Use it when you rewrite our title and meta in step 9.
+- **Is the client bidding?** If they're in the ads, check with the PPC team before recommending anything, because paid and organic should be read together.
+- **Semrush as backup:** `keyword_research` → `phrase_adwords` / `phrase_adwords_historical` (database `au`), or `paid_search_research` → `resource_adwords` for a competitor domain. Semrush's Australian ad data is thin for local, low-volume terms. On a test it returned nothing for an advertiser that Ahrefs had just captured. Treat "nothing found" there as no data, not no ads.
+- **If the user wants it truly live:** suggest a manual check in an incognito window from the target city, or the advertiser's page in the Google Ads Transparency Center.
+
 ## 7. On-page comparison: ours vs theirs
 
 Fetch our ranking page plus **every competitor that moved above us** and the current **#1**. Cap it at five pages. Extract from the served HTML:
@@ -141,7 +162,7 @@ Fetch our ranking page plus **every competitor that moved above us** and the cur
 | Schema | FAQPage, Service, Product, LocalBusiness, Review: what they have that we don't |
 | Internal links | How many internal links point at the page, and with what anchor text |
 | Links | `refdomains` and UR gap from step 6 |
-| AI visibility | Is there an AI Overview? Who is cited? Does their page answer the question in a clean, quotable passage near the top? |
+| AI visibility | Using the findings from 6b: does their page answer the question in a clean, quotable passage near the top, which ours doesn't? |
 
 Say plainly where **we're ahead** as well as behind. If our content is already stronger and the competitor won on links or brand, a content rewrite won't fix it, and the recommendation should say so.
 
@@ -154,6 +175,8 @@ Pick the primary cause and up to two contributing causes. Rate each one **High /
 | Normal fluctuation | Small move, GSC stable, no SERP or page changes |
 | Demand drop | Volume and GSC impressions down, position held |
 | SERP layout change | New AI Overview, local pack or video block; position steady, clicks down |
+| Lost the AI Overview | We were an `ai_overview_sitelink` before and aren't now, or competitors are cited and we aren't |
+| Paid pressure | More ads or a new Shopping carousel above organic; position steady, CTR down in GSC |
 | Lost SERP feature | `best_position_kind_previous` was a snippet or pack |
 | Our page changed | An edit, status change or link removal in `list_content_changes` before the drop |
 | Cannibalisation or URL swap | `url ≠ url_prev`, or impressions split across pages in GSC |
@@ -176,6 +199,8 @@ Choose from:
 - **Create a new page.** Only when the SERP clearly wants a different page type than the one we have, and say what that page type is.
 - **Internal links.** Name the pages that should link in, with suggested anchor text.
 - **Win back the SERP feature.** For a snippet, give a 40–60 word direct answer under a question-style H2. For an AI Overview, add a clear, citable summary with sources.
+- **Get cited in the AI Overview.** Name the cited pages and what they do that ours doesn't. Then give the exact passage to add: a 40–80 word direct answer to the query near the top, plus the specific facts the AIO uses, and how we'll make the brand entity clear.
+- **Respond to paid pressure.** If ads now dominate the SERP, say so plainly. Organic work alone may not win back the clicks. Brief the PPC team and borrow the winning ad angles for our title and meta.
 - **Technical fix.** Exact issue and exact fix.
 - **Links.** Only when the gap is the real cause. Give the size of the gap, not a generic "build links".
 - **Wait and watch.** A legitimate recommendation for fluctuation. Set a recheck date.
@@ -204,6 +229,15 @@ Contributing causes (confidence) — the evidence.
 
 ### Who moved
 | Competitor URL | Before → Now | What changed (title / words / links / format) |
+
+### AI Overview and ads (latest captured SERP, <date>)
+| | Before | Now |
+| AI Overview shown? | | |
+| Pages cited in AIO | | |
+| Are we cited? | | |
+| Ads above organic (count and advertisers) | | |
+| Shopping carousel? | | |
+Notable ad headlines and angles: …
 
 ### Ours vs theirs
 The comparison table from step 7, limited to the rows that differ.
