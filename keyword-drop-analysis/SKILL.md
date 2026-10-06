@@ -23,7 +23,7 @@ If the client name is ambiguous, or matches more than one Ahrefs project or GSC 
 
 ## 1. Find the client in both tools
 
-**Ahrefs.** `management-projects` → find the project whose target matches the client domain and has `has_keywords: true`. Then `management-project-keywords` for that project → confirm the keyword is tracked and get its `country`, `language_code` and `location_id`. One keyword can be tracked in several locations, such as Sydney and national. Analyse the location that dropped and name it in the report.
+**Ahrefs.** `management-projects` → find the project whose target matches the client domain and has `has_keywords: true`. Then `management-project-keywords` for that project → confirm the keyword is tracked and get its `country`, `language_code` and `location_id`. One keyword can be tracked in several locations, such as Sydney and national. Analyse the location that dropped and name it in the report. Keep the `location_id` and `language_code`: `rank-tracker-serp-overview` refuses a city-tracked keyword without them ("keyword not tracked in the specified location").
 
 If the keyword isn't tracked in Rank Tracker, say so, then fall back to `serp-overview` (Keywords Explorer, with `date` for history) and `site-explorer-organic-keywords` with `date_compared`. Flag that this data is less frequent.
 
@@ -45,6 +45,10 @@ where:  {"field":"keyword","is":["eq","<keyword>"]}
 
 Run it for both `mobile` and `desktop`. Then run it again with `date_compared` set 7 and 28 days back. One day only tells you something moved. The longer windows tell you whether it's a blip, a slide or a step change.
 
+**Check how often the project is tracked.** Many projects update weekly, not daily. If `serp_updated` and `serp_updated_prev` are the same timestamp, today and yesterday are the same reading. Compare the latest check with the one before it, and pull each weekly check over the last month so you can see the shape: one-off dip, bouncing, or steady slide.
+
+**Don't trust `where` alone.** The keyword filter sometimes comes back ignored, returning every keyword in the project. Always pick out the target keyword's row yourself, and ignore the other rows in a filtered call (their `serp_updated` can read null).
+
 Check these before you trust the numbers:
 
 | What you see | What it really means |
@@ -65,7 +69,8 @@ Rank Tracker is one SERP check from one location. GSC averages every real impres
 GSC data lags 2–3 days. Yesterday's drop usually isn't visible in GSC yet. Never query the last 36 hours and present it as complete.
 
 1. **Query trend.** `get_site_performance` with `dimensions: ["date"]`, filtered to the query, metrics `clicks, impressions, ctr, position`, last 28 days vs the 28 days before.
-2. **Which pages rank for it.** Same query filter with `dimensions: ["page"]`. Two or more pages sharing the impressions is **cannibalisation**, especially if the split changed recently.
+2. **Which pages rank for it.** Same query filter with `dimensions: ["page"]`. Two or more pages sharing the impressions is **cannibalisation**, especially if the split changed recently. A URL tagged `?utm_source=google&utm_medium=organic&utm_campaign=gmb` (or similar) is the **Google Business Profile listing in the local pack**, not an organic page. Report it separately. A strong map-pack position can hide an organic drop in a date-only view, and the reverse is also true.
+4. **Site-wide trend.** `dimensions: ["date"]`, `branded_queries: false`, no query filter. This tells you whether the whole site moved (algorithm or technical) or just this keyword.
 3. **Device split.** `dimensions: ["device"]` if Ahrefs showed the drop on only one device.
 
 Read them together:
@@ -91,9 +96,15 @@ Volume doesn't cause a ranking drop, but it explains a traffic drop. Keep the tw
 ## 5. Our side: did something change on our page?
 
 1. **Ranking URL swap.** Compare `url` with `url_prev` from step 2, and check `target_positions_count`. A different URL now ranking, or two URLs ranking, points to cannibalisation or Google preferring a different page type for this intent.
-2. **Content changes.** `list_content_changes` for the property, `page_contains` set to our ranking URL's path, from 30 days before the drop up to today, with `include_text_diff: true`. Look for title, meta, H1 or heading edits, words removed, internal links removed, and HTTP status changes. Any edit in the week before the drop is the first suspect.
+2. **Content changes.** Automatic change detection only exists for SEO Gets **super sites**. On other sites this call returns only annotations and Google updates, so say the content history couldn't be checked. Don't report "no changes". `list_content_changes` for the property, `page_contains` set to our ranking URL's path, from 30 days before the drop up to today, with `include_text_diff: true`. Look for title, meta, H1 or heading edits, words removed, internal links removed, and HTTP status changes. Any edit in the week before the drop is the first suspect.
 3. **Google updates.** Run the same call with `event_types: ["google_updates"]`. A drop that lines up with a core or spam update, and hits many keywords at once, is a site-level quality signal rather than a page-level one. Check whether other tracked keywords dropped on the same day (`rank-tracker-overview` with `order_by: position_diff:desc`).
 4. **The page itself.** Fetch the live URL and confirm: a 200 status, no `noindex`, a canonical pointing to itself, and the main content present in the raw HTML (not only after JavaScript runs). A page that 404s, redirects or self-canonicalises elsewhere explains everything, so check it before analysing competitors.
+
+   **Bot protection.** Cloudflare and other firewalls often block requests from cloud servers with a 403 "Attention Required" page, even with a normal browser user-agent. Don't spoof Googlebot. Cloudflare blocks fake Googlebots by IP, so a Googlebot user-agent proves nothing. If you're blocked:
+   - **Is Google affected?** If GSC impressions and positions are still flowing, Google can crawl. Recommend a URL Inspection live test in GSC to confirm.
+   - **Ahrefs `nr_words: 0`** on our URL while competitors show real counts usually means AhrefsBot is blocked too. That makes Ahrefs content data for the client unreliable.
+   - **AI crawlers.** The same rule may block GPTBot, ClaudeBot and PerplexityBot. That's an AI-visibility problem worth raising even when Google is fine.
+   - **On-page comparison.** Ask for the page HTML, a screenshot or the CMS content, or have the client allow verified bots. Put it under "Couldn't verify". Never guess at the content.
 
 ## 6. Competitors: who moved and why
 
@@ -101,12 +112,12 @@ Volume doesn't cause a ranking drop, but it explains a traffic drop. Keep the tw
 
 For every URL, line up the two snapshots:
 
-- position then and now, and **new entrants** that weren't in the top 20 before
-- `title` then and now (a changed title means the competitor rewrote it)
-- `nr_words` then and now (a word-count jump means they expanded the content)
-- `domain_rating`, `url_rating`, `refdomains`
+- position then and now, and **new entrants** that weren't in the top 20 before. Also note who **fell out**: the space they freed explains part of any shuffle
+- `domain_rating`, `url_rating`, `refdomains`, `nr_words`, `traffic`. **These are current values, not historical.** They come back identical for both dates, so they can't show that a competitor expanded content or gained links. They're only useful for comparing pages against each other today. To prove a competitor changed their page, use evidence from step 7 or `site-explorer-refdomains-history` for links
 - `page_type`: is Google now favouring a different format, such as a guide, category page, service page or tool?
 - `type`: who sits in the AI Overview (`ai_overview_sitelink`), snippet or local pack
+- the `question` rows (People Also Ask) on both dates. Their wording is a direct read of intent. If they're all about price, the SERP wants price information
+- a row with `url: null` in the organic list is a result Ahrefs couldn't identify. Note it and don't guess what it is
 
 **Project competitors.** `rank-tracker-competitors-overview` with `date_compared`, filtered to the keyword, `select: keyword,competitors_list,serp_features,volume`. This shows how the competitors we track for this client moved on this term, even outside the top 20.
 
