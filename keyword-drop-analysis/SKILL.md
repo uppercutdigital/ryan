@@ -1,0 +1,215 @@
+---
+name: keyword-drop-analysis
+description: Investigate why a client's keyword dropped in rankings and recommend what to do about it. Confirms the drop in Ahrefs Rank Tracker (day-on-day), cross-checks it against Google Search Console data in SEO Gets, checks search volume trends, detects ranking-URL swaps and cannibalisation, diffs the SERP to see which competitors moved, compares their title, meta description, H1 and on-page content against ours, and ends with a short, prioritised fix list. Use when asked why a keyword dropped, lost rankings, fell out of the top 10, or when a client asks what happened to a term. Triggers on "keyword drop", "why did this keyword drop", "lost ranking", "ranking dropped", "keyword drop analysis", "dropped position", "what happened to <keyword>".
+version: 1.0.0
+category: SEO
+subcategory: Rank tracking
+user-invocable: true
+argument-hint: "<keyword> <client domain> [--country AU] [--device mobile|desktop] [--date YYYY-MM-DD]"
+license: Apache 2.0
+---
+
+# Keyword drop analysis
+
+Two questions, in this order: **why did it drop**, and **what do we do about it**. Every conclusion in the report must point to a number from Ahrefs or GSC. If the evidence doesn't support a cause, don't claim it.
+
+## 0. Inputs
+
+Required: **keyword** and **client** (a domain, or a client name you can match to a domain).
+
+Defaults if not given: country `AU`, both devices (report the one that dropped, and mobile first if both did), latest date vs the previous check.
+
+If the client name is ambiguous, or matches more than one Ahrefs project or GSC property, ask. Don't guess.
+
+## 1. Find the client in both tools
+
+**Ahrefs.** `management-projects` → find the project whose target matches the client domain and has `has_keywords: true`. Then `management-project-keywords` for that project → confirm the keyword is tracked and get its `country`, `language_code` and `location_id`. One keyword can be tracked in several locations, such as Sydney and national. Analyse the location that dropped and name it in the report.
+
+If the keyword isn't tracked in Rank Tracker, say so, then fall back to `serp-overview` (Keywords Explorer, with `date` for history) and `site-explorer-organic-keywords` with `date_compared`. Flag that this data is less frequent.
+
+**SEO Gets (GSC).** `list_sites` → match the property. Use the exact property string it returns. Domain properties and URL-prefix properties are not interchangeable.
+
+Call `mcp__Ahrefs__doc` once per Ahrefs tool before first use in a session. The schemas are strict.
+
+## 2. Confirm the drop is real
+
+`rank-tracker-overview` with `date` = today and `date_compared` = yesterday, filtered to the keyword:
+
+```
+select: keyword,location,position,position_prev,position_diff,url,url_prev,
+        best_position_kind,best_position_kind_previous,serp_features,serp_features_prev,
+        target_positions_count,volume,keyword_difficulty,serp_updated,serp_updated_prev,
+        keyword_is_frozen
+where:  {"field":"keyword","is":["eq","<keyword>"]}
+```
+
+Run it for both `mobile` and `desktop`. Then run it again with `date_compared` set 7 and 28 days back. One day only tells you something moved. The longer windows tell you whether it's a blip, a slide or a step change.
+
+Check these before you trust the numbers:
+
+| What you see | What it really means |
+|---|---|
+| `serp_updated` equals `serp_updated_prev` | No new SERP check between the two dates, so the "drop" isn't a new reading. Widen the comparison |
+| `keyword_is_frozen: true` | The keyword is over the plan limit and isn't being updated. Stop and tell the user |
+| `position` is null | We fell out of the tracked range, or Ahrefs couldn't find us. Treat it as a big drop and check that the page is still live and indexable (step 5) |
+| `best_position_kind_previous` was `snippet`, `local_pack` or `ai_overview_sitelink`, now `organic` | We lost a SERP feature, not necessarily organic ground. This is a different problem with a different fix |
+| `serp_features` gained `ai_overview`, `local_pack`, `video` or `discussion` | The page may hold the same organic slot but sit lower on screen. Clicks fall even though position barely moves |
+| A move of 1–2 positions inside the top 10 | Normal daily fluctuation. Report it, recommend watching for 3–5 days, and don't build a big fix list on it |
+
+A drop is worth a full investigation when it's **3+ positions inside the top 10**, **falling out of the top 3 or top 10**, **5+ positions outside the top 10**, or a **lost SERP feature**. Below that, do steps 2–4 only and say why you stopped.
+
+## 3. Cross-check with Google Search Console (SEO Gets)
+
+Rank Tracker is one SERP check from one location. GSC averages every real impression. They answer different questions, and you need both.
+
+GSC data lags 2–3 days. Yesterday's drop usually isn't visible in GSC yet. Never query the last 36 hours and present it as complete.
+
+1. **Query trend.** `get_site_performance` with `dimensions: ["date"]`, filtered to the query, metrics `clicks, impressions, ctr, position`, last 28 days vs the 28 days before.
+2. **Which pages rank for it.** Same query filter with `dimensions: ["page"]`. Two or more pages sharing the impressions is **cannibalisation**, especially if the split changed recently.
+3. **Device split.** `dimensions: ["device"]` if Ahrefs showed the drop on only one device.
+
+Read them together:
+
+| Ahrefs | GSC | Likely story |
+|---|---|---|
+| Dropped | Position stable, impressions stable | Local or one-off SERP variance. Watch it, don't act yet |
+| Dropped | Position also worse | A real ranking loss. Carry on to steps 5–7 |
+| Stable | Clicks down, impressions stable | CTR problem: SERP features, a competitor's snippet, or our title or meta being rewritten |
+| Stable | Clicks and impressions down | Demand drop, not a ranking problem (step 4) |
+| URL changed | Impressions split across pages | Cannibalisation or Google reassessing intent |
+
+## 4. Search volume: has demand changed?
+
+`keywords-explorer-volume-history` for the keyword and country over the last 24 months. Compare:
+
+- this month vs last month
+- this month vs the **same month last year**, which separates seasonality from a genuine decline
+- GSC impressions over the same window, which reflect real demand for our footprint
+
+Volume doesn't cause a ranking drop, but it explains a traffic drop. Keep the two separate in the report. "Position held; searches fell 40% seasonally, the same as last October" is a valid and useful finding.
+
+## 5. Our side: did something change on our page?
+
+1. **Ranking URL swap.** Compare `url` with `url_prev` from step 2, and check `target_positions_count`. A different URL now ranking, or two URLs ranking, points to cannibalisation or Google preferring a different page type for this intent.
+2. **Content changes.** `list_content_changes` for the property, `page_contains` set to our ranking URL's path, from 30 days before the drop up to today, with `include_text_diff: true`. Look for title, meta, H1 or heading edits, words removed, internal links removed, and HTTP status changes. Any edit in the week before the drop is the first suspect.
+3. **Google updates.** Run the same call with `event_types: ["google_updates"]`. A drop that lines up with a core or spam update, and hits many keywords at once, is a site-level quality signal rather than a page-level one. Check whether other tracked keywords dropped on the same day (`rank-tracker-overview` with `order_by: position_diff:desc`).
+4. **The page itself.** Fetch the live URL and confirm: a 200 status, no `noindex`, a canonical pointing to itself, and the main content present in the raw HTML (not only after JavaScript runs). A page that 404s, redirects or self-canonicalises elsewhere explains everything, so check it before analysing competitors.
+
+## 6. Competitors: who moved and why
+
+**Diff the SERP.** `rank-tracker-serp-overview` for the keyword, with `project_id`, `country`, `device`, `top_positions: 20`, and `location_id`/`language_code` from step 1. Run it twice: once with no `date` (latest), and once with `date` set to the `serp_updated_prev` timestamp from step 2.
+
+For every URL, line up the two snapshots:
+
+- position then and now, and **new entrants** that weren't in the top 20 before
+- `title` then and now (a changed title means the competitor rewrote it)
+- `nr_words` then and now (a word-count jump means they expanded the content)
+- `domain_rating`, `url_rating`, `refdomains`
+- `page_type`: is Google now favouring a different format, such as a guide, category page, service page or tool?
+- `type`: who sits in the AI Overview (`ai_overview_sitelink`), snippet or local pack
+
+**Project competitors.** `rank-tracker-competitors-overview` with `date_compared`, filtered to the keyword, `select: keyword,competitors_list,serp_features,volume`. This shows how the competitors we track for this client moved on this term, even outside the top 20.
+
+**Is it page-wide or just this keyword?** For each competitor that overtook us, run `site-explorer-organic-keywords` on their URL (`mode: exact`) with `date_compared` set about 30 days back. If they gained across many related keywords, they improved the page. If they gained on this one term only, it's more likely SERP churn.
+
+## 7. On-page comparison: ours vs theirs
+
+Fetch our ranking page plus **every competitor that moved above us** and the current **#1**. Cap it at five pages. Extract from the served HTML:
+
+| Element | What to compare |
+|---|---|
+| Meta title | Keyword placement, length (about 50–60 characters), the angle (price, location, year, "best", "near me") |
+| Meta description | Is it answering the intent? Does it have a reason to click? Is Google showing it or rewriting it? |
+| H1 | Exact or close match to the keyword; does it match the searcher's intent? |
+| H2/H3 outline | Subtopics they cover that we don't. This is usually the real gap |
+| Word count and depth | Not length for its own sake. Are they answering more of the questions people ask? |
+| Freshness | Visible updated date, current year, current pricing or regulations |
+| Supporting content | FAQs, comparison tables, pricing, process steps, original images, video, reviews |
+| E-E-A-T signals | Named author or expert, credentials, case studies, Australian business details |
+| Schema | FAQPage, Service, Product, LocalBusiness, Review: what they have that we don't |
+| Internal links | How many internal links point at the page, and with what anchor text |
+| Links | `refdomains` and UR gap from step 6 |
+| AI visibility | Is there an AI Overview? Who is cited? Does their page answer the question in a clean, quotable passage near the top? |
+
+Say plainly where **we're ahead** as well as behind. If our content is already stronger and the competitor won on links or brand, a content rewrite won't fix it, and the recommendation should say so.
+
+## 8. Diagnosis
+
+Pick the primary cause and up to two contributing causes. Rate each one **High / Medium / Low confidence** based on how directly the data supports it.
+
+| Cause | Evidence that confirms it |
+|---|---|
+| Normal fluctuation | Small move, GSC stable, no SERP or page changes |
+| Demand drop | Volume and GSC impressions down, position held |
+| SERP layout change | New AI Overview, local pack or video block; position steady, clicks down |
+| Lost SERP feature | `best_position_kind_previous` was a snippet or pack |
+| Our page changed | An edit, status change or link removal in `list_content_changes` before the drop |
+| Cannibalisation or URL swap | `url ≠ url_prev`, or impressions split across pages in GSC |
+| Competitor improved content | Their `nr_words` or title changed, and they gained across related keywords |
+| Competitor link growth | Their refdomains or UR now well ahead of ours |
+| Intent shift | `page_type` across the top 10 changed (for example, guides replacing service pages) |
+| Google update | The date matches an update and many keywords dropped at once |
+| Technical issue | Non-200, noindex, wrong canonical, or content missing from the HTML |
+
+## 9. Recommendations: what to do
+
+Keep this short and specific. Three to five actions, most important first. For each action, give **what**, **why** (the evidence it fixes), **effort** (S/M/L) and **expected impact**.
+
+Choose from:
+
+- **Update metadata.** Write the new title and meta description in full. They must sound like a person wrote them, use Australian English, and not be stuffed with keywords.
+- **Expand or restructure content.** List the exact missing sections as H2s, with one line on what each should cover. Don't just say "add more content".
+- **Fix the H1 or heading structure** to match the intent the SERP is rewarding.
+- **Resolve cannibalisation.** Name the page to keep and the page to merge, redirect, re-target or de-optimise.
+- **Create a new page.** Only when the SERP clearly wants a different page type than the one we have, and say what that page type is.
+- **Internal links.** Name the pages that should link in, with suggested anchor text.
+- **Win back the SERP feature.** For a snippet, give a 40–60 word direct answer under a question-style H2. For an AI Overview, add a clear, citable summary with sources.
+- **Technical fix.** Exact issue and exact fix.
+- **Links.** Only when the gap is the real cause. Give the size of the gap, not a generic "build links".
+- **Wait and watch.** A legitimate recommendation for fluctuation. Set a recheck date.
+
+If you write copy for the fix (titles, metas, intro paragraphs), follow the house voice: natural, plain-spoken, specific, no filler, nothing that reads as AI-generated.
+
+## 10. Report format
+
+```
+## Keyword drop: "<keyword>" — <client domain>
+<location> · <device> · <date> vs <comparison date>
+
+**Summary:** One or two sentences. What happened, the main reason, and the single most important action.
+
+### What changed
+| | Before | Now |
+| Position | | |
+| Ranking URL | | |
+| SERP features | | |
+| GSC clicks / impressions / avg position (28d vs prior 28d) | | |
+| Search volume (this month / same month last year) | | |
+
+### Why it dropped
+Primary cause (confidence) — the evidence.
+Contributing causes (confidence) — the evidence.
+
+### Who moved
+| Competitor URL | Before → Now | What changed (title / words / links / format) |
+
+### Ours vs theirs
+The comparison table from step 7, limited to the rows that differ.
+
+### What to do
+1. Action — why — effort — impact
+2. …
+
+### Couldn't verify
+Anything that was missing, stale or blocked.
+```
+
+## Rules
+
+- **Evidence first.** No cause without a data point behind it. "Possibly" is fine when it's honest. A confident guess is not.
+- **Separate ranking, demand and CTR.** Most "drops" a client notices are one of the three, and each needs a different fix.
+- **Don't overreact to one day.** Daily rank tracking is noisy. Always show the 7-day and 28-day picture alongside the day-on-day change.
+- **Units.** Ahrefs returns money values (`value`, `cost_per_click`) in USD cents. Divide by 100 and label them as USD.
+- **Ahrefs rendering.** If a tool response includes `render_with`, call that render tool with the data before summarising.
+- **Say what you couldn't check.** If a competitor page blocked the fetch, GSC hadn't caught up, or the keyword wasn't tracked, put it in "Couldn't verify". Don't leave silent gaps.
+- **Stay read-only.** This skill diagnoses and recommends. Don't edit the client's site as part of it. Hand fixes to `wp-page-build` or the relevant workflow once the client or account lead agrees.
