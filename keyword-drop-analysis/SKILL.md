@@ -1,15 +1,16 @@
 ---
 name: keyword-drop-analysis
-description: Investigate why a client's keyword dropped in rankings and recommend what to do about it. Confirms the drop in Ahrefs Rank Tracker (day-on-day), cross-checks it against Google Search Console data in SEO Gets, checks search volume trends, detects ranking-URL swaps and cannibalisation, diffs the SERP to see which competitors moved, compares their title, meta description, H1 and on-page content against ours, and ends with a short, prioritised fix list. Use when asked why a keyword dropped, lost rankings, fell out of the top 10, or when a client asks what happened to a term. Triggers on "keyword drop", "why did this keyword drop", "lost ranking", "ranking dropped", "keyword drop analysis", "dropped position", "what happened to <keyword>".
-version: 1.0.0
-category: SEO
-subcategory: Rank tracking
-user-invocable: true
-argument-hint: "<keyword> <client domain> [--country AU] [--device mobile|desktop] [--date YYYY-MM-DD]"
-license: Apache 2.0
+description: Investigate why a client's keyword dropped in rankings and recommend what to do about it. Confirms the drop in Ahrefs Rank Tracker (day-on-day), cross-checks it against Google Search Console data in SEO Gets, checks search volume trends, detects ranking-URL swaps and cannibalisation, diffs the SERP to see which competitors moved, compares their title, meta description, H1 and on-page content against ours, and ends with a short, prioritised fix list. Use when asked why a keyword dropped, lost rankings, fell out of the top 10, or when a client asks what happened to a term. Triggers on "keyword drop", "why did this keyword drop", "lost ranking", "ranking dropped", "keyword drop analysis", "dropped position", "what happened to our ranking".
+license: Apache-2.0
+metadata:
+  version: "1.1.0"
+  category: "SEO"
+  subcategory: "Rank tracking"
 ---
 
 # Keyword drop analysis
+
+**Usage:** `/keyword-drop-analysis "<keyword>" <client domain> [--country AU] [--device mobile|desktop] [--date YYYY-MM-DD]`, or just ask "why did <keyword> drop for <client>?"
 
 Two questions, in this order: **why did it drop**, and **what do we do about it**. Every conclusion in the report must point to a number from Ahrefs or GSC. If the evidence doesn't support a cause, don't claim it.
 
@@ -25,7 +26,7 @@ If the client name is ambiguous, or matches more than one Ahrefs project or GSC 
 
 **Ahrefs.** `management-projects` → find the project whose target matches the client domain and has `has_keywords: true`. Then `management-project-keywords` for that project → confirm the keyword is tracked and get its `country`, `language_code` and `location_id`. One keyword can be tracked in several locations, such as Sydney and national. Analyse the location that dropped and name it in the report. Keep the `location_id` and `language_code`: `rank-tracker-serp-overview` refuses a city-tracked keyword without them ("keyword not tracked in the specified location").
 
-If the keyword isn't tracked in Rank Tracker, say so, then fall back to `serp-overview` (Keywords Explorer, with `date` for history) and `site-explorer-organic-keywords` with `date_compared`. Flag that this data is less frequent.
+**No Rank Tracker project?** Many clients only have GSC connected. If so, make GSC (SEO Gets) the primary source for steps 2–3. Use `get_site_performance` filtered to the query with `dimensions: ["date"]` for the position trend, and compare the last 28 days with the previous 28. Then use Ahrefs `site-explorer-organic-keywords` (`mode: subdomains`, `date_compared` about 30 days back, filtered to the keyword) for Ahrefs' view, and `serp-overview` (with `date` for a past snapshot) for the competitor SERP. Say in the report that there's no daily or weekly rank tracking behind the numbers. If no keyword was given, start by finding the non-branded queries with the biggest position or click loss over 28 days, and offer the user the top few.
 
 **SEO Gets (GSC).** `list_sites` → match the property. Use the exact property string it returns. Domain properties and URL-prefix properties are not interchangeable.
 

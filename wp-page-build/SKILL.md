@@ -1,15 +1,16 @@
 ---
 name: wp-page-build
 description: Design, build and publish a page into a WordPress/Elementor site over the REST API, then verify it landed correctly. Covers scoped HTML blocks that cannot leak into the theme, byte-level publish verification, expert and author bio pages with correct Person schema, and the claim-safety rules that stop unverified marketing claims going live. Use when asked to redesign, rebuild, optimise or publish a WordPress page, duplicate a product page for testing, fix Person or author schema on a team page, or push HTML into Elementor. Triggers on "redesign this page", "push it live", "update the page", "build this in WordPress", "optimise this bio page".
-version: 1.0.0
-category: Platform
-subcategory: WordPress
-user-invocable: true
-argument-hint: "<page URL> [--draft] [--audit-only]"
-license: Apache 2.0
+license: Apache-2.0
+metadata:
+  version: "1.0.0"
+  category: "Platform"
+  subcategory: "WordPress"
 ---
 
 # WordPress page build and publish
+
+**Usage:** `/wp-page-build <page URL> [--draft] [--audit-only]`
 
 Build a page as a self-contained HTML block, push it into Elementor over the REST API, and prove it landed byte-for-byte. Every gotcha below came from a real build.
 
